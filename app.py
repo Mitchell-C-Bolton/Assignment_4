@@ -6,6 +6,7 @@ from flask_marshmallow import Marshmallow
 from flask_sqlalchemy import SQLAlchemy
 from marshmallow import ValidationError
 from sqlalchemy import DECIMAL, Column, ForeignKey, Integer, String, Table, delete, func, select
+import sqlalchemy
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from typing import List
 
@@ -53,10 +54,6 @@ class Product(Base):
     # Price rounds to nearest second decimial place 5^ and 4v 5.995 = 6.0
     price: Mapped[float] = mapped_column(DECIMAL(precision=10, scale=2))
     
-    #Many to many relationship with orders
-    orders: Mapped[List['Order']] = relationship(
-        secondary=order_product, back_populates='products')
-    
 class Order(Base):
     __tablename__ = 'orders'
     
@@ -67,16 +64,13 @@ class Order(Base):
     # Many to one relationship with customer
     customers: Mapped['Customer'] = relationship(back_populates='orders')
     
-    #Many to many relationship with products
-    products: Mapped[List['Product']] = relationship(
-        secondary=order_product, back_populates='orders')
-    
     
 # Marshmallow Schemas ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 class CustomerSchema(ma.SQLAlchemyAutoSchema):
     class Meta:
         model = Customer
+        include_relationships = True
 
 customer_schema = CustomerSchema()
 customers_schema = CustomerSchema(many=True)
@@ -91,6 +85,7 @@ products_schema = ProductSchema(many=True)
 class OrderSchema(ma.SQLAlchemyAutoSchema):
     class Meta:
         model = Order
+        include_relationships = True
         
 order_schema = OrderSchema()
 orders_schema = OrderSchema(many=True)
@@ -103,7 +98,7 @@ def read_customer(id):
     customer = db.session.get(Customer, id)
     
     if not customer:
-        return jsonify({"message": f"Invalid customer ID: {id}"}), 400
+        return jsonify({"ERROR": f"Invalid customer ID: {id}"}), 400
     
     return customer_schema.jsonify(customer), 200
 
@@ -128,11 +123,14 @@ def create_customer():
         address=customer_data['address'],
         email=customer_data['email']
         )
-
-    db.session.add(new_customer)
-    db.session.commit()
+    try:
+        db.session.add(new_customer)
+        db.session.commit()
+        return customer_schema.jsonify(new_customer), 201
     
-    return customer_schema.jsonify(new_customer), 201
+    except sqlalchemy.exc.IntegrityError:
+        return jsonify({"ERROR": 
+            f"{new_customer.email} is most likely tied to another user."}), 400
 
 @app.route('/customers/<int:id>', 
     methods=['PUT']) # Update customer
@@ -140,7 +138,7 @@ def update_customer(id):
     customer = db.session.get(Customer, id)
     
     if not customer:
-        return jsonify({"message": f"Invalid customer ID: {id}"}), 400
+        return jsonify({"ERROR": f"Invalid customer ID: {id}"}), 400
     
     try:
         customer_data = customer_schema.load(request.json)
@@ -148,8 +146,8 @@ def update_customer(id):
         return jsonify(e.messages), 400
 
     customer.name = customer_data['name']
-    customer.email = customer_data['email']
     customer.address = customer_data['address']
+    customer.email = customer_data['email']
     
     db.session.commit()
     return customer_schema.jsonify(customer), 200
@@ -158,14 +156,25 @@ def update_customer(id):
     methods=['DELETE']) # Delete customer
 def delete_customer(id):
     customer = db.session.get(Customer, id)
-     
+    
+    db.session.execute( # Deletes all order_products associated with the order associated with the customer
+        delete(order_product).where(order_product.c.order_id.in_(
+            select(Order.id).where(Order.customer_id == id)
+        ))
+    )
+    
+    db.session.execute( # Deletes all orders associated with the customer
+        delete(Order).where(Order.customer_id == id)
+        )
+    
     if not customer:
-        return jsonify({"message": f"Invalid customer ID: {id}"}), 400
+        return jsonify({"ERROR": f"Invalid customer ID: {id}"}), 400
+
+    else:
+        db.session.delete(customer)
+        db.session.commit()
     
-    db.session.delete(customer)
-    db.session.commit()
-    
-    return jsonify({"message": f"Cusomer {id} was deleted"}), 200
+        return jsonify({"message": f"Cusomer {id} was deleted"}), 200
 
 # Product End Points ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -175,16 +184,16 @@ def read_product(id):
     product = db.session.get(Product, id)
     
     if not product:
-        return jsonify({"message": f"Invalid product ID: {id}"}), 400
+        return jsonify({"ERROR": f"Invalid product ID: {id}"}), 400
     
-    return customer_schema.jsonify(product), 200
+    return product_schema.jsonify(product), 200
 
 @app.route('/products', methods=['GET']) # Read all products
 def read_products():
     query = select(Product)
     products = db.session.execute(query).scalars().all()
     
-    return customers_schema.jsonify(products), 200
+    return products_schema.jsonify(products), 200
 
 @app.route('/products', 
     methods=['POST']) # Write product
@@ -202,6 +211,7 @@ def create_product():
 
     db.session.add(new_product)
     db.session.commit()
+    print(new_product.price)
     
     return product_schema.jsonify(new_product), 201
 
@@ -211,7 +221,7 @@ def update_product(id):
     product = db.session.get(Product, id)
     
     if not product:
-        return jsonify({"message": f"Invalid product ID: {id}"}), 400
+        return jsonify({"ERROR": f"Invalid product ID: {id}"}), 400
     
     try:
         product_data = product_schema.load(request.json)
@@ -230,7 +240,7 @@ def delete_product(id):
     product = db.session.get(Product, id)
      
     if not product:
-        return jsonify({"message": f"Invalid product ID: {id}"}), 400
+        return jsonify({"ERROR": f"Invalid product ID: {id}"}), 400
     
     db.session.delete(product)
     db.session.commit()
@@ -245,7 +255,7 @@ def read_order(id):
     order = db.session.get(Order, id)
     
     if not order:
-        return jsonify({"message": f"Invalid order ID: {id}"}), 400
+        return jsonify({"ERROR": f"Invalid order ID: {id}"}), 400
     
     return order_schema.jsonify(order), 200
 
@@ -263,34 +273,37 @@ def read_all_orders_customer(customer_id):
     customer = db.session.get(Customer, customer_id)
     
     if not customer:
-        return jsonify({"message": f"Invalid customer ID: {customer_id}"}), 400
+        return jsonify({"ERROR": f"Invalid customer ID: {customer_id}"}), 400
     else:
         query = select(Order).where(Order.customer_id == customer_id)
         orders = db.session.execute(query).scalars().all()
         
-        return orders_schema.jsonify(orders), 200
+        return order_schema.jsonify(orders), 200
 
 @app.route('/orders/<int:customer_id>', 
     methods=['POST']) # Write order
 def create_order(customer_id):
-    
     new_order = Order(customer_id=customer_id)
 
     db.session.add(new_order)
     db.session.commit()
     
-    return product_schema.jsonify(new_order), 201
+    return order_schema.jsonify(new_order), 201
 
 # Update order seemed irrelevant
-# will add if order table gets more fields worth updating. 
+# will add if order table gets any content worth updating. 
 
 @app.route('/orders/<int:id>', 
     methods=['DELETE']) # Delete order
 def delete_order(id):
     order = db.session.get(Order, id)
-     
+    
     if not order:
-        return jsonify({"message": f"Invalid order ID: {id}"}), 400
+        return jsonify({"ERROR": f"Invalid order ID: {id}"}), 400
+    
+    db.session.execute( # Deletes all associations between the order and the product.
+        delete(order_product).where(
+            order_product.c.order_id == id))
     
     db.session.delete(order)
     db.session.commit()
@@ -306,9 +319,9 @@ def assign_product_to_order(product_id, order_id, quantity):
     order = db.session.get(Order, order_id)
     
     if not product:
-        return jsonify({"message": f"Invalid product ID: {product_id}"}), 400
+        return jsonify({"ERROR": f"Invalid product ID: {product_id}"}), 400
     elif not order:
-        return jsonify({"message": f"Invalid order ID: {order_id}"}), 400
+        return jsonify({"ERROR": f"Invalid order ID: {order_id}"}), 400
     
     exist_check = db.session.execute( # Checks for existing order-product relations
         select(order_product).where(
@@ -318,7 +331,7 @@ def assign_product_to_order(product_id, order_id, quantity):
     ).fetchone()
     
     if exist_check:
-        return jsonify({"message": 
+        return jsonify({"ERROR": 
         f"Relation between {product_id} and {order_id} already exists"}), 400
     else:
         db.session.execute(
@@ -340,9 +353,9 @@ def delete_product_from_order(order_id, product_id):
     order = db.session.get(Order, order_id)
     
     if not product:
-        return jsonify({"message": f"Invalid product ID: {product_id}"}), 400
+        return jsonify({"ERROR": f"Invalid product ID: {product_id}"}), 400
     elif not order:
-        return jsonify({"message": f"Invalid order ID: {order_id}"}), 400
+        return jsonify({"ERROR": f"Invalid order ID: {order_id}"}), 400
     
     exist_check = db.session.execute( # Checks for existing order-product relations
         select(order_product).where(
@@ -369,7 +382,7 @@ def delete_product_from_order(order_id, product_id):
 # Other Database Commands ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 @app.route('/panic_button',
-    methods=['DELETE']) # Deletes the entire database (usefull for testing purposes)
+    methods=['DELETE']) # Deletes the entire database (UAT purposes)
 def Delete_database():
     db.drop_all()
     db.create_all()
@@ -377,7 +390,7 @@ def Delete_database():
     return jsonify({"message": "Clean slate protocol complete."}), 200
 
 @app.route('/load_test_data', 
-    methods=['POST']) # Loads a bunch of hard coded test data for UAT purposes
+    methods=['POST']) # Loads a lot of hard coded data (UAT purposes)
 def load_test_data():
     
     try:
@@ -425,7 +438,7 @@ def load_test_data():
         order5 = Order(
             customer_id=2
         )
-        order6 = Order(
+        order6 = Order( # Intentionally empty order
             customer_id=3
         )
         
@@ -525,7 +538,7 @@ def load_test_data():
         db.session.commit()
         
     except:
-        return jsonify({"message": "Test data failed to load. Try clearing all existing data first."}), 400
+        return jsonify({"ERROR": "Test data failed to load. Try clearing all existing data first."}), 400
     return jsonify({"message": "Test data has been loaded into database"}), 200
 # Run App ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
