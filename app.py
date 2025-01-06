@@ -278,7 +278,7 @@ def read_all_orders_customer(customer_id):
         query = select(Order).where(Order.customer_id == customer_id)
         orders = db.session.execute(query).scalars().all()
         
-        return order_schema.jsonify(orders), 200
+        return orders_schema.jsonify(orders), 200
 
 @app.route('/orders/<int:customer_id>', 
     methods=['POST']) # Write order
@@ -540,6 +540,7 @@ def load_test_data():
     except:
         return jsonify({"ERROR": "Test data failed to load. Try clearing all existing data first."}), 400
     return jsonify({"message": "Test data has been loaded into database"}), 200
+
 # Run App ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 if __name__ ==  '__main__':
