@@ -17,9 +17,9 @@ app.config['SQLALCHEMY_DATABASE_URI'] = \
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db.init_app(app)
-ma.init_app(app)  # Initialize Marshmallow instance in app.py
+ma.init_app(app)
 
-app.register_blueprint(customer_bp)
+app.register_blueprint(customer_bp) # Blueprints tie routes folder to app
 app.register_blueprint(product_bp)
 app.register_blueprint(order_bp)
 app.register_blueprint(utility_bp)

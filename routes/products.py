@@ -3,8 +3,7 @@
 from flask import Blueprint, jsonify, request
 from marshmallow import ValidationError
 from sqlalchemy import select, delete
-import sqlalchemy
-from models import db, Customer, Order, Product, order_product
+from models import db, Product, order_product
 from schemas import products_schema, product_schema
 
 # Main ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -74,6 +73,10 @@ def delete_product(id):
      
     if not product:
         return jsonify({"ERROR": f"Invalid product ID: {id}"}), 400
+    
+    db.session.execute( # Deletes all associations between the order and the product.
+        delete(order_product).where(
+            order_product.c.product_id == id))
     
     db.session.delete(product)
     db.session.commit()

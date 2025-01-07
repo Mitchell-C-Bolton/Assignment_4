@@ -1,10 +1,8 @@
 # Imports ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-from flask import Blueprint, jsonify, request
-from marshmallow import ValidationError
+from flask import Blueprint, jsonify
 from sqlalchemy import select, delete
-import sqlalchemy
-from models import db, Customer, Order, Product, order_product
+from models import db, Customer, Order, order_product
 from schemas import order_schema, orders_schema
 
 # Main ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -46,6 +44,10 @@ def read_all_orders_customer(customer_id):
     methods=['POST']) # Write order
 def create_order(customer_id):
     new_order = Order(customer_id=customer_id)
+    customer = db.session.get(Customer, customer_id)
+
+    if not customer:
+        return jsonify({"ERROR": f"Invalid customer ID: {customer_id}"}), 400
 
     db.session.add(new_order)
     db.session.commit()

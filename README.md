@@ -28,30 +28,33 @@ The E-commerce API is a RESTful application built with Flask, SQLAlchemy, and My
 - GET /customers: Retrieve a list of all customers.
 - GET /customers/int:id: Retrieve details of a specific customer by their ID.
 - POST /customers: Add a new customer to the database.
+   JSON: "name", "email", "address"
 - PUT /customers/int:id: Update the details of an existing customer by their ID.
-- DELETE /customers/int:id: Remove a customer from the database by their ID.
+   JSON: "name", "email", "address"
+- DELETE /customers/int:id: Remove a customer from the database by their ID. Deletes all associated orders and order-product relationships.
 
 ### Products
 - GET /products: Retrieve a list of all products.
 - GET /products/int:id: Retrieve details of a specific product by its ID.
 - POST /products: Add a new product to the database.
+   JSON: "name", "price"
 - PUT /products/int:id: Update the details of an existing product by its ID.
-- DELETE /products/int:id: Remove a product from the database by its ID.
+   JSON: "name", "price"
+- DELETE /products/int:id: Remove a product from the database by its ID. Deletes all associated order_product relationships
 
 ### Orders
 - GET /orders: Retrieve a list of all orders.
 - GET /orders/int:id: Retrieve details of a specific order by its ID.
 - GET /orders/orders_for_customer/int:customer_id: Retrieve all orders associated with a specific customer.
-- POST /orders: Add a new order.
 - POST /orders/int:customer_id: Create a new order for a specific customer by their ID.
-- DELETE /orders/int:id: Remove an order from the database by its ID.
+- DELETE /orders/int:id: Remove an order from the database by its ID. Deletes all associated order_product relationships
 
 ### Order Product Management
 - POST /orders/int:order_id/add_product/int:product_id/qty/int:quantity: Add a product to a specific order with the specified quantity.
 - DELETE /orders/int:order_id/remove_product/int:product_id: Remove a product from a specific order.
 
 ### Utilities
-- DELETE /panic_button: Deletes the entire database. Primarily for UAT (User Acceptance Testing) purposes.
+- DELETE /panic_button: Deletes the entire database and loads in blank tables. Primarily for UAT (User Acceptance Testing) purposes.
 - POST /load_test_data: Load pre-defined, hard-coded test data into the database. Primarily for UAT purposes.
 
 ---
