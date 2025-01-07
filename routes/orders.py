@@ -1,9 +1,13 @@
+# Imports ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 from flask import Blueprint, jsonify, request
 from marshmallow import ValidationError
 from sqlalchemy import select, delete
 import sqlalchemy
 from models import db, Customer, Order, Product, order_product
 from schemas import order_schema, orders_schema
+
+# Main ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 order_bp = Blueprint('orders', __name__)
 

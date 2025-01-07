@@ -1,6 +1,10 @@
+# Imports ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 from flask import Blueprint, jsonify
 from sqlalchemy import select, delete
 from models import Product, db, Order, order_product
+
+# Main ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 order_product_bp = Blueprint('orders_products', __name__)
 
